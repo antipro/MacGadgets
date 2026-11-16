@@ -470,6 +470,7 @@ final class MTPVirtualFileSystem {
             if existing.handle != 0 {
                 try client.deleteObject(handle: existing.handle)
                 invalidateReadCache(handle: existing.handle)
+                invalidateDirectory(parent)
             }
         }
 

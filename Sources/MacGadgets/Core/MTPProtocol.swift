@@ -397,16 +397,33 @@ final class MTPClient: MTPClientProtocol {
 
     func openSession() throws {
         try withLock {
-            // Query DeviceInfo before or right after opening session
+            try openSessionLocked()
+        }
+    }
+
+    private func openSessionLocked() throws {
+        // Query DeviceInfo before or right after opening session
+        if cachedDeviceInfo == nil {
+            cachedDeviceInfo = try? performGetDeviceInfo(transactionID: 0)
+        }
+        let resp = try performCommandNoData(
+            op: .openSession,
+            params: [1],
+            explicitTransactionID: 0
+        )
+        if resp.code == MTPResponseCode.ok.rawValue {
+            sessionOpen = true
+            nextTransactionID = 1
             if cachedDeviceInfo == nil {
-                cachedDeviceInfo = try? performGetDeviceInfo(transactionID: 0)
+                cachedDeviceInfo = try? performGetDeviceInfo(transactionID: takeTransactionID())
             }
-            let resp = try performCommandNoData(
-                op: .openSession,
-                params: [1],
-                explicitTransactionID: 0
-            )
-            if resp.code == MTPResponseCode.ok.rawValue {
+            return
+        }
+        if resp.code == MTPResponseCode.sessionAlreadyOpen.rawValue {
+            // Close existing stale session and reopen cleanly
+            _ = try? performCommandNoData(op: .closeSession, params: [], explicitTransactionID: 1)
+            let retry = try performCommandNoData(op: .openSession, params: [1], explicitTransactionID: 0)
+            if retry.code == MTPResponseCode.ok.rawValue || retry.code == MTPResponseCode.sessionAlreadyOpen.rawValue {
                 sessionOpen = true
                 nextTransactionID = 1
                 if cachedDeviceInfo == nil {
@@ -414,21 +431,14 @@ final class MTPClient: MTPClientProtocol {
                 }
                 return
             }
-            if resp.code == MTPResponseCode.sessionAlreadyOpen.rawValue {
-                // Close existing stale session and reopen cleanly
-                _ = try? performCommandNoData(op: .closeSession, params: [], explicitTransactionID: 1)
-                let retry = try performCommandNoData(op: .openSession, params: [1], explicitTransactionID: 0)
-                if retry.code == MTPResponseCode.ok.rawValue || retry.code == MTPResponseCode.sessionAlreadyOpen.rawValue {
-                    sessionOpen = true
-                    nextTransactionID = 1
-                    if cachedDeviceInfo == nil {
-                        cachedDeviceInfo = try? performGetDeviceInfo(transactionID: takeTransactionID())
-                    }
-                    return
-                }
-                throw MTPError.protocolError(retry.code)
-            }
-            throw MTPError.protocolError(resp.code)
+            throw MTPError.protocolError(retry.code)
+        }
+        throw MTPError.protocolError(resp.code)
+    }
+
+    private func ensureSessionOpenLocked() throws {
+        if !sessionOpen {
+            try openSessionLocked()
         }
     }
 
@@ -596,6 +606,7 @@ final class MTPClient: MTPClientProtocol {
 
     func createFolder(storageID: UInt32, parentHandle: UInt32, name: String) throws -> UInt32 {
         try withLock {
+            try ensureSessionOpenLocked()
             let infoData = buildObjectInfoDataset(
                 storageID: storageID,
                 parentHandle: parentHandle,
@@ -625,6 +636,7 @@ final class MTPClient: MTPClientProtocol {
         fileSize: UInt64
     ) throws -> UInt32 {
         try withLock {
+            try ensureSessionOpenLocked()
             let infoData = buildObjectInfoDataset(
                 storageID: storageID,
                 parentHandle: parentHandle,
@@ -648,13 +660,13 @@ final class MTPClient: MTPClientProtocol {
             try sendCommandContainer(op: .sendObject, transactionID: txID2, params: [])
             do {
                 try sendObjectDataFromFile(transactionID: txID2, fileURL: fileURL, fileSize: fileSize)
-                let objResp = try receiveResponseContainer(expectedTransactionID: txID2)
+                let objResp = try receiveResponseContainer(expectedTransactionID: txID2, timeoutMs: dataTimeoutMs)
                 guard objResp.code == MTPResponseCode.ok.rawValue else {
                     throw MTPError.protocolError(objResp.code)
                 }
             } catch {
-                // A partially sent object leaves the device waiting for data: reset the
-                // session so later operations do not inherit a wedged endpoint.
+                // A partially sent object leaves the device waiting for data: reset and
+                // reopen the session so later operations do not inherit a wedged endpoint.
                 resetSessionLocked()
                 throw error
             }
@@ -730,19 +742,12 @@ final class MTPClient: MTPClientProtocol {
     }
 
     /// Best-effort recovery after a stalled or aborted MTP transaction.
-    /// Clears endpoint stalls and drops the session so the next operation can
-    /// start cleanly instead of leaving the phone's MTP stack wedged.
+    /// Clears endpoint stalls, drops the stale session, and reopens a clean session
+    /// so the next operation can start without leaving the phone's MTP stack wedged.
     func resetSession() {
         lock.lock()
         defer { lock.unlock() }
-        _ = try? transport.clearStall(directionIn: true)
-        _ = try? transport.clearStall(directionIn: false)
-        if sessionOpen {
-            _ = try? performCommandNoData(op: .closeSession, params: [])
-        }
-        sessionOpen = false
-        cachedDeviceInfo = nil
-        nextTransactionID = 1
+        resetSessionLocked()
     }
 
     func close() {
@@ -766,6 +771,7 @@ final class MTPClient: MTPClientProtocol {
         sessionOpen = false
         cachedDeviceInfo = nil
         nextTransactionID = 1
+        try? openSessionLocked()
     }
 
     private func withLock<T>(_ body: () throws -> T) rethrows -> T {
@@ -1035,8 +1041,8 @@ final class MTPClient: MTPClientProtocol {
         return resp
     }
 
-    private func receiveResponseContainer(expectedTransactionID: UInt32) throws -> MTPResponse {
-        let packet = try readNonEmptyPacket(timeoutMs: commandTimeoutMs)
+    private func receiveResponseContainer(expectedTransactionID: UInt32, timeoutMs: UInt32? = nil) throws -> MTPResponse {
+        let packet = try readNonEmptyPacket(timeoutMs: timeoutMs ?? commandTimeoutMs)
         return try parseResponseContainer(packet)
     }
 

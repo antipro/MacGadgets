@@ -289,13 +289,17 @@ private func testMTPBinaryAndClientFraming() throws {
 
 private func testMTPUploadStreamsExactLength() throws {
     let transport = MockMTPUSBTransport()
-    // SendObjectInfo response (storage, parent, new handle) then SendObject response.
+    // OpenSession (GetDeviceInfo + OpenSession) then SendObjectInfo + SendObject.
     transport.queuedResponses = [
-        MockMTPUSBTransport.makeResponse(code: .ok, txID: 1, params: [0x00010001, 0xFFFFFFFF, 42]),
-        MockMTPUSBTransport.makeResponse(code: .ok, txID: 2, params: [])
+        MockMTPUSBTransport.makeResponse(code: .generalError, txID: 0), // GetDeviceInfo pre-open
+        MockMTPUSBTransport.makeResponse(code: .ok, txID: 0),           // OpenSession
+        MockMTPUSBTransport.makeResponse(code: .generalError, txID: 1), // GetDeviceInfo post-open
+        MockMTPUSBTransport.makeResponse(code: .ok, txID: 2, params: [0x00010001, 0xFFFFFFFF, 42]),
+        MockMTPUSBTransport.makeResponse(code: .ok, txID: 3, params: [])
     ]
 
     let client = MTPClient(transport: transport)
+    try client.openSession()
     let payload = Data(repeating: 0x5A, count: 700_000)
     let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("upload-\(UUID().uuidString)")
     try payload.write(to: tmp)
@@ -312,20 +316,58 @@ private func testMTPUploadStreamsExactLength() throws {
 
     // Total bytes written for the SendObject data phase must be exactly 12 + payload bytes
     // (a ZLP may follow, which is empty and therefore contributes nothing).
+    let openSessionOverhead = transport.writtenPackets[0].count // GetDeviceInfo
+        + transport.writtenPackets[1].count                     // OpenSession
+        + transport.writtenPackets[2].count                     // GetDeviceInfo post-open
+    let sendObjectInfoAndCmd = transport.writtenPackets[3].count // SendObjectInfo command
+        + transport.writtenPackets[4].count                      // SendObjectInfo dataset
+        + transport.writtenPackets[5].count                      // SendObject command
     let totalWritten = transport.writtenPackets.reduce(0) { $0 + $1.count }
-    let overhead = transport.writtenPackets[0].count   // SendObjectInfo command
-        + transport.writtenPackets[1].count            // SendObjectInfo dataset
-        + transport.writtenPackets[2].count            // SendObject command
-    let sendObjectBytes = totalWritten - overhead
+    let sendObjectBytes = totalWritten - openSessionOverhead - sendObjectInfoAndCmd
     check(sendObjectBytes == payload.count + 12, "SendObject data phase sends exactly the declared length")
 
     // Every intermediate data-phase packet must be an exact multiple of maxPacketSizeOut (512)
     // so USB never treats an intermediate chunk as a short-packet end-of-transfer.
-    let dataPackets = Array(transport.writtenPackets.dropFirst(3))
+    let dataPackets = Array(transport.writtenPackets.dropFirst(6))
     check(dataPackets.count > 1, "large upload splits across multiple USB transfers")
     for pkt in dataPackets.dropLast() {
         check(pkt.count % transport.maxPacketSizeOut == 0, "intermediate SendObject chunk aligned to maxPacketSizeOut")
     }
+}
+
+private func testMTPResetSessionReopensSession() throws {
+    let transport = MockMTPUSBTransport()
+    // 1) openSession() -> GetDeviceInfo + OpenSession
+    // 2) resetSession() -> OpenSession (since session was open, closeSession runs first)
+    // 3) uploadFile() -> SendObjectInfo + SendObject
+    transport.queuedResponses = [
+        MockMTPUSBTransport.makeResponse(code: .generalError, txID: 0), // GetDeviceInfo pre-open #1
+        MockMTPUSBTransport.makeResponse(code: .ok, txID: 0),           // OpenSession #1
+        MockMTPUSBTransport.makeResponse(code: .generalError, txID: 1), // GetDeviceInfo post-open #1
+        MockMTPUSBTransport.makeResponse(code: .ok, txID: 2),           // CloseSession
+        MockMTPUSBTransport.makeResponse(code: .generalError, txID: 0), // GetDeviceInfo pre-open #2
+        MockMTPUSBTransport.makeResponse(code: .ok, txID: 0),           // OpenSession #2
+        MockMTPUSBTransport.makeResponse(code: .generalError, txID: 1), // GetDeviceInfo post-open #2
+        MockMTPUSBTransport.makeResponse(code: .ok, txID: 2, params: [0x00010001, 0xFFFFFFFF, 77]), // SendObjectInfo
+        MockMTPUSBTransport.makeResponse(code: .ok, txID: 3, params: [])                            // SendObject
+    ]
+
+    let client = MTPClient(transport: transport)
+    try client.openSession()
+    client.resetSession()
+
+    let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("reopen-\(UUID().uuidString)")
+    try Data("abc".utf8).write(to: tmp)
+    defer { try? FileManager.default.removeItem(at: tmp) }
+
+    let handle = try client.uploadFile(
+        storageID: 0x00010001,
+        parentHandle: MTPClient.rootParentHandle,
+        filename: "reopen.txt",
+        fileURL: tmp,
+        fileSize: 3
+    )
+    check(handle == 77, "upload succeeds on reopened session after resetSession()")
 }
 
 private func testMTPVirtualFileSystemAndNFSv3() throws {
@@ -445,6 +487,7 @@ struct TestRunner {
         testPowerAssertion()
         try testMTPBinaryAndClientFraming()
         try testMTPUploadStreamsExactLength()
+        try testMTPResetSessionReopensSession()
         try testMTPVirtualFileSystemAndNFSv3()
         print("All MacGadgets tests passed!")
     }

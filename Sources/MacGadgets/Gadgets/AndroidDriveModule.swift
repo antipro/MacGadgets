@@ -443,7 +443,7 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
         let locationID = dev.locationID
 
         // Drop the mount first so nothing else keeps talking to the wedged device.
-        teardownActiveSession(forceUnmount: true)
+        teardownActiveSession(forceUnmount: true, flushPendingWrites: false)
         state = .error(
             message: "\(deviceName) 传输中断（\(reason)），正在尝试自动恢复 USB 连接……",
             canReleasePTPD: false
@@ -471,7 +471,7 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
         }
     }
 
-    private func teardownActiveSession(forceUnmount: Bool, alreadyUnmounted: Bool = false) {
+    private func teardownActiveSession(forceUnmount: Bool, alreadyUnmounted: Bool = false, flushPendingWrites: Bool = true) {
         healthTimer?.invalidate()
         healthTimer = nil
 
@@ -496,7 +496,7 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
             } else if let mp {
                 NFSMounter.removeMountPointIfEmpty(mp)
             }
-            server?.stop()
+            server?.stop(flushPending: flushPendingWrites)
             client?.close()
             hostAlias?.stop()
             vfs?.cleanupTempFiles()

@@ -28,6 +28,7 @@ final class NFSv3Server {
         var path: String
         var isDirty: Bool
         var isFlushing: Bool
+        var isCancelled: Bool
         var lastWriteAt: Date
         var lastFailureAt: Date?
     }
@@ -151,7 +152,7 @@ final class NFSv3Server {
         }
 
         let timer = DispatchSource.makeTimerSource(queue: flushQueue)
-        timer.schedule(deadline: .now() + 2, repeating: 2)
+        timer.schedule(deadline: .now() + 0.5, repeating: 0.5)
         timer.setEventHandler { [weak self] in
             self?.flushIdleStagingFiles()
         }
@@ -161,11 +162,13 @@ final class NFSv3Server {
         return self.port
     }
 
-    func stop() {
+    func stop(flushPending: Bool = true) {
         isRunning = false
         idleFlushTimer?.cancel()
         idleFlushTimer = nil
-        flushAllStagingFiles()
+        if flushPending {
+            flushAllStagingFiles()
+        }
         if listenFD >= 0 {
             Darwin.shutdown(listenFD, SHUT_RDWR)
             Darwin.close(listenFD)
@@ -708,11 +711,16 @@ final class NFSv3Server {
                   let path = pathForID(fid) else {
                 return wccError(.stale, path: nil, fileID: 0)
             }
-            let commitStart = Date()
-            let commitOK = flushStagingFile(fileID: fid, path: path)
-            dbg("COMMIT \(path) ok=\(commitOK) in \(String(format: "%.2f", Date().timeIntervalSince(commitStart)))s")
-            guard commitOK else {
-                return wccError(.io, path: path, fileID: fid)
+            _ = reader.u64() // offset
+            _ = reader.u32() // count
+            // macOS NFS client flushes dirty UBC pages with COMMIT every ~16MB during a
+            // large copy. Uploading synchronously on every COMMIT causes O(N^2) delete +
+            // re-upload cycles over USB and blocks the RPC socket past timeo=600.
+            // Writes are already durable in our local SSD staging file; metadata sidecars
+            // flush instantly, while real files are uploaded once by flushIdleStagingFiles
+            // (or synchronously on RENAME / UMNT / stop).
+            if MTPVirtualFileSystem.isMacOSMetadataPath(path) {
+                _ = flushStagingFile(fileID: fid, path: path)
             }
             var w = XDRWriter()
             w.u32(NFSStat.ok.rawValue)
@@ -817,7 +825,7 @@ final class NFSv3Server {
         }
 
         stateLock.lock()
-        stagingFiles[fileID] = StagingFile(url: url, path: path, isDirty: false, isFlushing: false, lastWriteAt: Date(), lastFailureAt: nil)
+        stagingFiles[fileID] = StagingFile(url: url, path: path, isDirty: false, isFlushing: false, isCancelled: false, lastWriteAt: Date(), lastFailureAt: nil)
         stateLock.unlock()
         return url
     }
@@ -844,12 +852,15 @@ final class NFSv3Server {
 
     private func truncateStagingFile(fileID: UInt64, path: String, newSize: UInt64) {
         let url = ensureStagingFile(fileID: fileID, path: path, populateFromExisting: newSize > 0)
+        let currentSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.uint64Value ?? 0
+        guard newSize != currentSize else { return }
         if let fh = try? FileHandle(forUpdating: url) {
             try? fh.truncate(atOffset: newSize)
             try? fh.close()
             stateLock.lock()
             if var st = stagingFiles[fileID] {
                 st.isDirty = true
+                st.lastWriteAt = Date()
                 stagingFiles[fileID] = st
             }
             stateLock.unlock()
@@ -900,29 +911,47 @@ final class NFSv3Server {
         }
         dbg("FLUSH \(path) size=\(fileSize) ok=\(succeeded) in \(String(format: "%.2f", Date().timeIntervalSince(started)))s")
 
+        var urlToRemove: URL?
+        var shouldDeleteFromVFS = false
+
         stateLock.lock()
         if var current = stagingFiles[fileID] {
             current.isFlushing = false
-            if !succeeded {
+            if current.isCancelled {
+                stagingFiles.removeValue(forKey: fileID)
+                urlToRemove = current.url
+                shouldDeleteFromVFS = succeeded
+            } else if !succeeded {
                 current.isDirty = true
                 current.lastFailureAt = Date()
+                stagingFiles[fileID] = current
+            } else if !current.isDirty {
+                // Upload completed and no new writes arrived in the meantime: free the staging file.
+                stagingFiles.removeValue(forKey: fileID)
+                urlToRemove = current.url
             } else {
                 current.lastFailureAt = nil
+                stagingFiles[fileID] = current
             }
-            stagingFiles[fileID] = current
         }
         stateLock.unlock()
+
+        if shouldDeleteFromVFS {
+            try? vfs.delete(path: path)
+        }
+        if let urlToRemove {
+            try? FileManager.default.removeItem(at: urlToRemove)
+        }
 
         return succeeded
     }
 
-    /// Safety net for clients that never send COMMIT: push dirty staging files once
-    /// they have been idle for a while, so nothing is silently left behind.
+    /// Push dirty staging files to MTP once writes have settled for 1 second.
     private func flushIdleStagingFiles() {
         let now = Date()
         stateLock.lock()
         let candidates = stagingFiles.compactMap { fid, st -> (UInt64, String)? in
-            guard st.isDirty, !st.isFlushing, now.timeIntervalSince(st.lastWriteAt) > 4.0 else { return nil }
+            guard st.isDirty, !st.isFlushing, !st.isCancelled, now.timeIntervalSince(st.lastWriteAt) > 1.0 else { return nil }
             // Back off after a failed upload instead of hammering the device.
             if let failedAt = st.lastFailureAt, now.timeIntervalSince(failedAt) < 15.0 { return nil }
             return (fid, st.path)
@@ -935,11 +964,21 @@ final class NFSv3Server {
     }
 
     private func removeStagingFile(fileID: UInt64) {
+        var urlToRemove: URL?
         stateLock.lock()
-        let removed = stagingFiles.removeValue(forKey: fileID)
+        if var existing = stagingFiles[fileID] {
+            if existing.isFlushing {
+                existing.isCancelled = true
+                existing.isDirty = false
+                stagingFiles[fileID] = existing
+            } else {
+                stagingFiles.removeValue(forKey: fileID)
+                urlToRemove = existing.url
+            }
+        }
         stateLock.unlock()
-        if let url = removed?.url {
-            try? FileManager.default.removeItem(at: url)
+        if let urlToRemove {
+            try? FileManager.default.removeItem(at: urlToRemove)
         }
     }
 
