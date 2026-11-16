@@ -22,10 +22,10 @@ enum DurationFormatter {
         let secs = total % 60
 
         var parts: [String] = []
-        if hours > 0 { parts.append("\(hours) 小时") }
-        if minutes > 0 { parts.append("\(minutes) 分") }
-        if hours == 0 && secs > 0 { parts.append("\(secs) 秒") }
-        return parts.isEmpty ? "0 秒" : parts.joined()
+        if hours > 0 { parts.append(L10n.tr("duration.hours", hours)) }
+        if minutes > 0 { parts.append(L10n.tr("duration.minutes", minutes)) }
+        if hours == 0 && secs > 0 { parts.append(L10n.tr("duration.seconds", secs)) }
+        return parts.isEmpty ? L10n.tr("duration.zero_seconds") : parts.joined(separator: " ")
     }
 
     /// Parses `"90"`, `"90m"`, `"2h"`, `"1h30m"`, `"57600s"`, `"16:00:00"`, `"16 小时"`. Returns seconds.
@@ -80,11 +80,11 @@ enum DurationFormatter {
 
             let multiplier: Double
             switch unit {
-            case "h", "时", "小时":
+            case "h", "hr", "hrs", "时", "小时", "時", "時間", "시간", "ч", "س":
                 multiplier = 3600
-            case "m", "分", "分钟":
+            case "m", "min", "mins", "分", "分钟", "분", "мин", "د":
                 multiplier = 60
-            case "s", "秒":
+            case "s", "sec", "secs", "秒", "초", "с", "ث":
                 multiplier = 1
             case "":
                 // A bare second number in a compound expression, e.g. "1h30".

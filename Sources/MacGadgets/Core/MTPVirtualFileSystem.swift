@@ -22,12 +22,12 @@ enum VFSError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notFound: return "文件或目录不存在"
-        case .alreadyExists: return "目标已存在"
-        case .isDirectory: return "目标是文件夹"
-        case .notDirectory: return "目标不是文件夹"
-        case .readOnlyStorage: return "手机存储为只读"
-        case .invalidPath: return "无效的路径"
+        case .notFound: return L10n.tr("vfs.error.not_found")
+        case .alreadyExists: return L10n.tr("vfs.error.already_exists")
+        case .isDirectory: return L10n.tr("vfs.error.is_directory")
+        case .notDirectory: return L10n.tr("vfs.error.not_directory")
+        case .readOnlyStorage: return L10n.tr("vfs.error.read_only_storage")
+        case .invalidPath: return L10n.tr("vfs.error.invalid_path")
         case .mtpError(let err): return err.localizedDescription
         }
     }

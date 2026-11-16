@@ -7,7 +7,7 @@ enum NFSMountError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .mountFailed(let msg):
-            return "挂载 NFS 磁盘失败：\(msg)"
+            return L10n.tr("nfs.error.mount_failed", msg)
         }
     }
 }
@@ -99,7 +99,7 @@ enum NFSMounter {
             Thread.sleep(forTimeInterval: 0.15)
         }
         if !resolvesToLoopback(hostName) {
-            throw NFSMountError.mountFailed("本地主机名 \(hostName) 解析失败")
+            throw NFSMountError.mountFailed(L10n.tr("nfs.error.hostname_resolution", hostName))
         }
     }
 

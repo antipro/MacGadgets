@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
+    private var preferencesWindow: NSWindow?
     private var modules: [BaseGadgetModule] = []
     private var keepAwakeModule: KeepAwakeModule?
     private var scrollReverserModule: ScrollReverserModule?
@@ -53,6 +54,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
 
         setupPopover(keepAwake: keepAwake, scrollReverser: scrollReverser, androidDrive: androidDrive)
+        LocalizationManager.shared.onLanguageChange = { [weak self] in
+            self?.refreshStatusItem()
+            self?.preferencesWindow?.title = L10n.tr("prefs.window_title")
+        }
         refreshStatusItem()
 
         NotificationCenter.default.addObserver(
@@ -79,6 +84,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             keepAwake: keepAwake,
             scrollReverser: scrollReverser,
             androidDrive: androidDrive,
+            onOpenPreferences: { [weak self] in
+                self?.openPreferences()
+            },
             onQuit: { [weak self] in
                 self?.quit()
             },
@@ -129,16 +137,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private func showContextMenu(from button: NSStatusBarButton) {
         popover?.performClose(nil)
         let menu = NSMenu()
-        let aboutItem = NSMenuItem(title: "关于 MacGadgets", action: #selector(showAbout), keyEquivalent: "")
+        let prefsItem = NSMenuItem(title: L10n.tr("menu.preferences"), action: #selector(openPreferences), keyEquivalent: ",")
+        prefsItem.target = self
+        menu.addItem(prefsItem)
+        let aboutItem = NSMenuItem(title: L10n.tr("menu.about"), action: #selector(showAbout), keyEquivalent: "")
         aboutItem.target = self
         menu.addItem(aboutItem)
         menu.addItem(.separator())
-        let quitItem = NSMenuItem(title: "退出 MacGadgets", action: #selector(quit), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: L10n.tr("menu.quit"), action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
         statusItem?.menu = menu
         button.performClick(nil)
         statusItem?.menu = nil
+    }
+
+    @objc private func openPreferences() {
+        popover?.performClose(nil)
+        NSApp.activate(ignoringOtherApps: true)
+
+        if let window = preferencesWindow {
+            window.title = L10n.tr("prefs.window_title")
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        guard let keepAwakeModule, let scrollReverserModule, let androidDriveModule else { return }
+        let prefsView = PreferencesView(
+            keepAwake: keepAwakeModule,
+            scrollReverser: scrollReverserModule,
+            androidDrive: androidDriveModule
+        )
+        let hostingController = NSHostingController(rootView: prefsView)
+        hostingController.sizingOptions = [.preferredContentSize]
+
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = L10n.tr("prefs.window_title")
+        window.styleMask = [.titled, .closable]
+        window.isReleasedWhenClosed = false
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        self.preferencesWindow = window
     }
 
     // MARK: - NSPopoverDelegate & Outside Click
@@ -177,7 +216,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         var tooltips = ["MacGadgets"]
         if let keepAwakeModule, keepAwakeModule.isActive, let title = keepAwakeModule.statusBarTitle {
-            tooltips.append("防休眠中：\(title)")
+            tooltips.append(L10n.tr("tooltip.keep_awake", title))
         }
         if let scrollReverserModule, scrollReverserModule.isActiveAndRunning {
             tooltips.append(scrollReverserModule.summaryText)
@@ -203,7 +242,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             .applicationName: "MacGadgets",
             .applicationVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
             .credits: NSAttributedString(
-                string: "常驻菜单栏的原生控制中心小工具集合：\n• 保持唤醒：基于 IOKit 电源断言（等同 caffeinate -d）\n• 滚动方向翻转：基于 CoreGraphics 事件拦截，独立翻转鼠标与触摸板\n• Android 磁盘：基于 IOKit USB + MTP + 本地 NFSv3 服务与 mDNS 别名，让安卓手机出现在访达「位置」中",
+                string: L10n.tr("about.credits"),
                 attributes: [.font: NSFont.systemFont(ofSize: 11)]
             )
         ])

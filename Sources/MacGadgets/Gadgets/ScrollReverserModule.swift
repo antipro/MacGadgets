@@ -6,7 +6,7 @@ import Combine
 @MainActor
 final class ScrollReverserModule: BaseGadgetModule, ObservableObject {
     override var identifier: String { "scroll-reverser" }
-    override var displayName: String { "滚动方向翻转" }
+    override var displayName: String { L10n.tr("scroll.title") }
 
     private enum DefaultsKey {
         static let invertMouseWheel = "ScrollReverser.invertMouseWheel"
@@ -67,14 +67,14 @@ final class ScrollReverserModule: BaseGadgetModule, ObservableObject {
     }
 
     var summaryText: String {
-        guard isAnyEnabled else { return "滚动方向翻转：未开启" }
+        guard isAnyEnabled else { return L10n.tr("scroll.summary.off") }
         if !isTapRunning {
-            return "滚动方向翻转：等待辅助功能权限"
+            return L10n.tr("scroll.summary.waiting_permission")
         }
         var targets: [String] = []
-        if invertMouseWheel { targets.append("鼠标滚轮") }
-        if invertTrackpad { targets.append("触摸板") }
-        return "滚动方向翻转：已翻转 \(targets.joined(separator: "、"))"
+        if invertMouseWheel { targets.append(L10n.tr("scroll.mouse_wheel")) }
+        if invertTrackpad { targets.append(L10n.tr("scroll.trackpad")) }
+        return L10n.tr("scroll.summary.active", targets.joined(separator: L10n.tr("common.list_separator")))
     }
 
     override init() {

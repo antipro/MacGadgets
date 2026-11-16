@@ -24,6 +24,8 @@ struct ControlCenterView: View {
     @ObservedObject var keepAwake: KeepAwakeModule
     @ObservedObject var scrollReverser: ScrollReverserModule
     @ObservedObject var androidDrive: AndroidDriveModule
+    @ObservedObject private var l10n = LocalizationManager.shared
+    var onOpenPreferences: () -> Void
     var onQuit: () -> Void
     var onOpenCustomInput: () -> Void
 
@@ -36,6 +38,7 @@ struct ControlCenterView: View {
     private let presetColumns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 4)
 
     var body: some View {
+        let _ = l10n.selection
         VStack(spacing: 10) {
             keepAwakeCard
             scrollReverserCard
@@ -45,6 +48,7 @@ struct ControlCenterView: View {
         .padding(12)
         .frame(width: 328)
         .background(VisualEffectBackground(material: .popover, blendingMode: .behindWindow))
+        .environment(\.layoutDirection, l10n.layoutDirection)
         .onAppear {
             launchAtLogin = LaunchAtLogin.shared.isEnabled
             keepAwake.refreshMenuState()
@@ -72,10 +76,10 @@ struct ControlCenterView: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .help(keepAwake.isActive ? "点击取消保持唤醒" : "点击立即开启 16 小时（57600 秒）")
+                    .help(keepAwake.isActive ? L10n.tr("keep_awake.help.cancel") : L10n.tr("keep_awake.help.start_16h"))
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("保持唤醒")
+                        Text(L10n.tr("keep_awake.title"))
                             .font(.system(size: 13, weight: .semibold))
                         keepAwakeSubtitle
                     }
@@ -94,11 +98,11 @@ struct ControlCenterView: View {
                                         .clipShape(Capsule())
                                 }
                                 .buttonStyle(.plain)
-                                .help("延长 1 小时")
+                                .help(L10n.tr("keep_awake.help.extend_1h"))
                             }
 
                             Button(action: { keepAwake.cancel() }) {
-                                Text("取消")
+                                Text(L10n.tr("common.cancel"))
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundColor(.red)
                                     .padding(.horizontal, 8)
@@ -107,7 +111,7 @@ struct ControlCenterView: View {
                                     .clipShape(Capsule())
                             }
                             .buttonStyle(.plain)
-                            .help("立即取消保持唤醒")
+                            .help(L10n.tr("keep_awake.help.cancel_now"))
                         }
                     }
                 }
@@ -138,7 +142,7 @@ struct ControlCenterView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Toggle(isOn: $keepAwake.displayAllowedToSleep) {
-                            Text("仅保持系统唤醒（允许息屏）")
+                            Text(L10n.tr("keep_awake.allow_display_sleep"))
                                 .font(.system(size: 11))
                                 .foregroundColor(.secondary)
                         }
@@ -158,7 +162,7 @@ struct ControlCenterView: View {
                         }) {
                             HStack(spacing: 3) {
                                 Image(systemName: "clock")
-                                Text("自定义")
+                                Text(L10n.tr("keep_awake.custom"))
                             }
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(showCustomInput ? .orange : .secondary)
@@ -168,12 +172,12 @@ struct ControlCenterView: View {
 
                     if showCustomInput {
                         HStack(spacing: 6) {
-                            TextField("如 57600s、2h、90m、16:00:00", text: $customInput)
+                            TextField(L10n.tr("keep_awake.custom_placeholder"), text: $customInput)
                                 .textFieldStyle(.roundedBorder)
                                 .font(.system(size: 11))
                                 .onSubmit { submitCustomDuration() }
 
-                            Button("开始") {
+                            Button(L10n.tr("keep_awake.start")) {
                                 submitCustomDuration()
                             }
                             .controlSize(.small)
@@ -202,11 +206,11 @@ struct ControlCenterView: View {
     private var keepAwakeSubtitle: some View {
         if keepAwake.isActive {
             if let remaining = keepAwake.remainingText, let endTime = keepAwake.endTimeText {
-                Text("剩余 \(remaining) · 至 \(endTime)")
+                Text(L10n.tr("keep_awake.subtitle.remaining", remaining, endTime))
                     .font(.system(size: 11, weight: .medium).monospacedDigit())
                     .foregroundColor(.orange)
             } else if let elapsed = keepAwake.elapsedText {
-                Text("持续唤醒中 · 已运行 \(elapsed)")
+                Text(L10n.tr("keep_awake.subtitle.indefinite", elapsed))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.orange)
             }
@@ -215,7 +219,7 @@ struct ControlCenterView: View {
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
         } else {
-            Text("未开启 · 默认 16 小时 (57600s)")
+            Text(L10n.tr("keep_awake.subtitle.idle"))
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
         }
@@ -237,7 +241,7 @@ struct ControlCenterView: View {
         ControlCenterCard {
             VStack(alignment: .leading, spacing: 9) {
                 HStack {
-                    Text("滚动方向翻转")
+                    Text(L10n.tr("scroll.title"))
                         .font(.system(size: 13, weight: .semibold))
                     Spacer()
                     scrollStatusBadge
@@ -245,8 +249,8 @@ struct ControlCenterView: View {
 
                 HStack(spacing: 8) {
                     ControlCenterTileButton(
-                        title: "鼠标滚轮",
-                        subtitle: scrollReverser.invertMouseWheel ? "已翻转" : "默认方向",
+                        title: L10n.tr("scroll.mouse_wheel"),
+                        subtitle: scrollReverser.invertMouseWheel ? L10n.tr("scroll.state.reversed") : L10n.tr("scroll.state.default"),
                         symbolName: scrollReverser.invertMouseWheel ? "computermouse.fill" : "computermouse",
                         isActive: scrollReverser.invertMouseWheel,
                         activeColor: .accentColor
@@ -255,8 +259,8 @@ struct ControlCenterView: View {
                     }
 
                     ControlCenterTileButton(
-                        title: "触摸板",
-                        subtitle: scrollReverser.invertTrackpad ? "已翻转" : "默认方向",
+                        title: L10n.tr("scroll.trackpad"),
+                        subtitle: scrollReverser.invertTrackpad ? L10n.tr("scroll.state.reversed") : L10n.tr("scroll.state.default"),
                         symbolName: scrollReverser.invertTrackpad ? "hand.draw.fill" : "hand.draw",
                         isActive: scrollReverser.invertTrackpad,
                         activeColor: .accentColor
@@ -269,7 +273,7 @@ struct ControlCenterView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.left.and.right")
                             .font(.system(size: 10))
-                        Text("同时翻转水平滚动方向")
+                        Text(L10n.tr("scroll.invert_horizontal"))
                             .font(.system(size: 11))
                     }
                     .foregroundColor(.secondary)
@@ -283,7 +287,7 @@ struct ControlCenterView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundColor(.orange)
-                            Text("需要「辅助功能」权限才能拦截滚轮，点击授权 →")
+                            Text(L10n.tr("scroll.permission_prompt"))
                                 .font(.system(size: 11))
                                 .foregroundColor(.primary)
                                 .multilineTextAlignment(.leading)
@@ -304,15 +308,15 @@ struct ControlCenterView: View {
     @ViewBuilder
     private var scrollStatusBadge: some View {
         if !scrollReverser.isAnyEnabled {
-            Text("未开启")
+            Text(L10n.tr("scroll.badge.off"))
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
         } else if scrollReverser.needsPermission {
-            Text("等待授权")
+            Text(L10n.tr("scroll.badge.waiting"))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.orange)
         } else {
-            Text("已生效")
+            Text(L10n.tr("scroll.badge.active"))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.accentColor)
         }
@@ -334,7 +338,7 @@ struct ControlCenterView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Android 磁盘")
+                        Text(L10n.tr("android.title"))
                             .font(.system(size: 13, weight: .semibold))
                         androidDriveSubtitle
                     }
@@ -367,9 +371,9 @@ struct ControlCenterView: View {
                                 .frame(height: 5)
 
                                 HStack {
-                                    Text("可用 \(Self.formatBytes(device.freeBytes))")
+                                    Text(L10n.tr("android.storage.free", Self.formatBytes(device.freeBytes)))
                                     Spacer()
-                                    Text("共 \(Self.formatBytes(device.totalBytes))")
+                                    Text(L10n.tr("android.storage.total", Self.formatBytes(device.totalBytes)))
                                 }
                                 .font(.system(size: 10).monospacedDigit())
                                 .foregroundColor(.secondary)
@@ -381,7 +385,7 @@ struct ControlCenterView: View {
                                 Image(systemName: "info.circle.fill")
                                     .foregroundColor(.orange)
                                     .font(.system(size: 10))
-                                Text("当前仅暴露 DCIM/Pictures，若需完整目录请在手机切换为「传输文件 (MTP)」")
+                                Text(L10n.tr("android.ptp_warning"))
                                     .font(.system(size: 10))
                                     .foregroundColor(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -397,7 +401,7 @@ struct ControlCenterView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "sidebar.left")
                                 .font(.system(size: 9))
-                            Text("访达「位置」中显示为 \(device.finderName)")
+                            Text(L10n.tr("android.finder_location", device.finderName))
                                 .font(.system(size: 10))
                                 .lineLimit(1)
                                 .truncationMode(.middle)
@@ -408,7 +412,7 @@ struct ControlCenterView: View {
                             Button(action: { androidDrive.openInFinder() }) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "folder.fill")
-                                    Text("在访达中打开")
+                                    Text(L10n.tr("android.open_in_finder"))
                                 }
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundColor(.white)
@@ -422,7 +426,7 @@ struct ControlCenterView: View {
                             Button(action: { androidDrive.eject() }) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "eject.fill")
-                                    Text("弹出")
+                                    Text(L10n.tr("android.eject"))
                                 }
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundColor(.red)
@@ -432,7 +436,7 @@ struct ControlCenterView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             }
                             .buttonStyle(.plain)
-                            .help("安全卸载手机磁盘")
+                            .help(L10n.tr("android.help.eject"))
                         }
                     }
 
@@ -457,7 +461,7 @@ struct ControlCenterView: View {
                         HStack(spacing: 6) {
                             if canReleasePTPD {
                                 Button(action: { androidDrive.releaseCameraLockAndRetry() }) {
-                                    Text("释放相机进程占用并重试")
+                                    Text(L10n.tr("android.release_ptpd"))
                                         .font(.system(size: 11, weight: .semibold))
                                         .foregroundColor(.white)
                                         .frame(maxWidth: .infinity)
@@ -468,7 +472,7 @@ struct ControlCenterView: View {
                                 .buttonStyle(.plain)
                             } else {
                                 Button(action: { androidDrive.rescanAndMount() }) {
-                                    Text("重新扫描并挂载")
+                                    Text(L10n.tr("android.rescan_and_mount"))
                                         .font(.system(size: 11, weight: .medium))
                                         .foregroundColor(.primary)
                                         .frame(maxWidth: .infinity)
@@ -483,14 +487,14 @@ struct ControlCenterView: View {
 
                 case .idle, .scanning, .connecting:
                     HStack(spacing: 8) {
-                        Text("插线并在手机选择「传输文件 (MTP)」")
+                        Text(L10n.tr("android.idle_hint"))
                             .font(.system(size: 11))
                             .foregroundColor(.secondary)
                         Spacer(minLength: 4)
                         Button(action: { androidDrive.rescanAndMount() }) {
                             HStack(spacing: 3) {
                                 Image(systemName: "arrow.clockwise")
-                                Text("扫描")
+                                Text(L10n.tr("android.scan"))
                             }
                             .font(.system(size: 11, weight: .medium))
                             .padding(.horizontal, 8)
@@ -509,7 +513,7 @@ struct ControlCenterView: View {
 
                 VStack(alignment: .leading, spacing: 5) {
                     Toggle(isOn: $androidDrive.isAutoMountEnabled) {
-                        Text("插入 Android 手机时自动挂载")
+                        Text(L10n.tr("android.auto_mount"))
                             .font(.system(size: 11))
                             .foregroundColor(.secondary)
                     }
@@ -517,7 +521,7 @@ struct ControlCenterView: View {
                     .controlSize(.mini)
 
                     Toggle(isOn: $androidDrive.openFinderOnMount) {
-                        Text("挂载后自动打开访达窗口")
+                        Text(L10n.tr("android.open_finder_on_mount"))
                             .font(.system(size: 11))
                             .foregroundColor(.secondary)
                     }
@@ -533,15 +537,15 @@ struct ControlCenterView: View {
     private var androidDriveSubtitle: some View {
         switch androidDrive.state {
         case .idle:
-            Text("未连接 · 自动识别 MTP 设备")
+            Text(L10n.tr("android.subtitle.idle"))
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
         case .scanning:
-            Text("正在扫描 USB 设备...")
+            Text(L10n.tr("android.subtitle.scanning"))
                 .font(.system(size: 11))
                 .foregroundColor(.orange)
         case .connecting(let name):
-            Text("正在连接 \(name)...")
+            Text(L10n.tr("android.subtitle.connecting", name))
                 .font(.system(size: 11))
                 .foregroundColor(.orange)
         case .mounted(let dev):
@@ -551,7 +555,7 @@ struct ControlCenterView: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
         case .error:
-            Text("连接异常")
+            Text(L10n.tr("android.subtitle.error"))
                 .font(.system(size: 11))
                 .foregroundColor(.orange)
         }
@@ -561,19 +565,19 @@ struct ControlCenterView: View {
     private var androidDriveBadge: some View {
         switch androidDrive.state {
         case .idle:
-            Text("待机")
+            Text(L10n.tr("android.badge.idle"))
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
         case .scanning, .connecting:
-            Text("挂载中")
+            Text(L10n.tr("android.badge.mounting"))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.orange)
         case .mounted:
-            Text("已挂载")
+            Text(L10n.tr("android.badge.mounted"))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.green)
         case .error:
-            Text("需处理")
+            Text(L10n.tr("android.badge.error"))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.orange)
         }
@@ -604,7 +608,7 @@ struct ControlCenterView: View {
                         }
                     }
                 )) {
-                    Text("登录时自动启动")
+                    Text(L10n.tr("footer.launch_at_login"))
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
@@ -613,10 +617,21 @@ struct ControlCenterView: View {
 
                 Spacer()
 
+                Button(action: onOpenPreferences) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .padding(5)
+                        .background(Color.primary.opacity(0.06))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help(L10n.tr("footer.preferences"))
+
                 Button(action: onQuit) {
                     HStack(spacing: 4) {
                         Image(systemName: "power")
-                        Text("退出")
+                        Text(L10n.tr("footer.quit"))
                     }
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.secondary)

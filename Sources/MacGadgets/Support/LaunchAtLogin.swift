@@ -35,7 +35,7 @@ enum LaunchAtLoginError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notBundled:
-            return "请从 MacGadgets.app 运行（用 Scripts/build-app.sh 打包），直接运行的命令行二进制无法注册为登录项。"
+            return L10n.tr("login.error.not_bundled")
         }
     }
 }

@@ -6,7 +6,7 @@ import Combine
 @MainActor
 final class KeepAwakeModule: BaseGadgetModule, ObservableObject {
     override var identifier: String { "keep-awake" }
-    override var displayName: String { "保持唤醒" }
+    override var displayName: String { L10n.tr("keep_awake.title") }
 
     private enum DefaultsKey {
         static let allowDisplaySleep = "KeepAwake.allowDisplaySleep"
@@ -16,20 +16,23 @@ final class KeepAwakeModule: BaseGadgetModule, ObservableObject {
 
     struct Preset: Identifiable {
         let id: String
-        let shortTitle: String
-        let title: String
+        let shortKey: String
+        let titleKey: String
         let duration: TimeInterval?
+
+        var shortTitle: String { L10n.tr(shortKey) }
+        var title: String { L10n.tr(titleKey) }
     }
 
     static let presets: [Preset] = [
-        Preset(id: "15m", shortTitle: "15分", title: "15 分钟", duration: 15 * 60),
-        Preset(id: "30m", shortTitle: "30分", title: "30 分钟", duration: 30 * 60),
-        Preset(id: "1h", shortTitle: "1小时", title: "1 小时", duration: 60 * 60),
-        Preset(id: "2h", shortTitle: "2小时", title: "2 小时", duration: 2 * 60 * 60),
-        Preset(id: "4h", shortTitle: "4小时", title: "4 小时", duration: 4 * 60 * 60),
-        Preset(id: "8h", shortTitle: "8小时", title: "8 小时", duration: 8 * 60 * 60),
-        Preset(id: "16h", shortTitle: "16小时", title: "16 小时（57600 秒）", duration: 16 * 60 * 60),
-        Preset(id: "inf", shortTitle: "无限期", title: "无限期（直到取消）", duration: nil)
+        Preset(id: "15m", shortKey: "keep_awake.preset.15m.short", titleKey: "keep_awake.preset.15m.title", duration: 15 * 60),
+        Preset(id: "30m", shortKey: "keep_awake.preset.30m.short", titleKey: "keep_awake.preset.30m.title", duration: 30 * 60),
+        Preset(id: "1h", shortKey: "keep_awake.preset.1h.short", titleKey: "keep_awake.preset.1h.title", duration: 60 * 60),
+        Preset(id: "2h", shortKey: "keep_awake.preset.2h.short", titleKey: "keep_awake.preset.2h.title", duration: 2 * 60 * 60),
+        Preset(id: "4h", shortKey: "keep_awake.preset.4h.short", titleKey: "keep_awake.preset.4h.title", duration: 4 * 60 * 60),
+        Preset(id: "8h", shortKey: "keep_awake.preset.8h.short", titleKey: "keep_awake.preset.8h.title", duration: 8 * 60 * 60),
+        Preset(id: "16h", shortKey: "keep_awake.preset.16h.short", titleKey: "keep_awake.preset.16h.title", duration: 16 * 60 * 60),
+        Preset(id: "inf", shortKey: "keep_awake.preset.inf.short", titleKey: "keep_awake.preset.inf.title", duration: nil)
     ]
 
     struct Session {
@@ -128,7 +131,7 @@ final class KeepAwakeModule: BaseGadgetModule, ObservableObject {
     @discardableResult
     func startCustom(input: String) -> String? {
         guard let seconds = DurationFormatter.parse(input) else {
-            let msg = "无法识别时长“\(input)”，示例：90、45m、2h、57600s、16:00:00"
+            let msg = L10n.tr("keep_awake.error.invalid_duration", input)
             lastErrorMessage = msg
             return msg
         }
@@ -144,13 +147,13 @@ final class KeepAwakeModule: BaseGadgetModule, ObservableObject {
     }
 
     func cancel() {
-        finish(reason: "已取消")
+        finish(reason: L10n.tr("keep_awake.finished.cancelled"))
     }
 
     override func refreshMenuState() {
         now = Date()
         if let session, let remaining = session.remaining(at: now), remaining <= 0 {
-            finish(reason: "已到时间，唤醒保护结束")
+            finish(reason: L10n.tr("keep_awake.finished.expired"))
         }
     }
 
@@ -164,7 +167,7 @@ final class KeepAwakeModule: BaseGadgetModule, ObservableObject {
     ) -> Bool {
         let effectiveScope = scope ?? (displayAllowedToSleep ? .system : .displayAndSystem)
         guard assertion.acquire(effectiveScope) else {
-            lastErrorMessage = "系统拒绝了唤醒断言，可能受策略限制"
+            lastErrorMessage = L10n.tr("keep_awake.error.assertion_denied")
             return false
         }
 
@@ -204,7 +207,7 @@ final class KeepAwakeModule: BaseGadgetModule, ObservableObject {
         now = Date()
         guard let session else { return }
         if let remaining = session.remaining(at: now), remaining <= 0 {
-            finish(reason: "已到时间，唤醒保护结束")
+            finish(reason: L10n.tr("keep_awake.finished.expired"))
             return
         }
         onStateChange?()

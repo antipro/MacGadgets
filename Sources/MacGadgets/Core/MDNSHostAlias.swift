@@ -74,9 +74,9 @@ enum MDNSHostAliasError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidLabel:
-            return "无法为设备生成有效的本地主机名"
+            return L10n.tr("mdns.error.invalid_hostname")
         case .registrationFailed(let code):
-            return "注册本地主机名失败 (mDNS 错误 \(code))"
+            return L10n.tr("mdns.error.registration_failed", code)
         }
     }
 }

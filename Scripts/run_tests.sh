@@ -8,9 +8,11 @@ mkdir -p "$ROOT_DIR/.build"
 swiftc \
     -parse-as-library \
     -framework Foundation \
+    -framework SwiftUI \
     -framework IOKit \
     -framework CoreGraphics \
     -framework ApplicationServices \
+    "$ROOT_DIR/Sources/MacGadgets/Support/L10n.swift" \
     "$ROOT_DIR/Sources/MacGadgets/Support/DurationFormatter.swift" \
     "$ROOT_DIR/Sources/MacGadgets/Core/PowerAssertion.swift" \
     "$ROOT_DIR/Sources/MacGadgets/Core/ScrollEventTap.swift" \

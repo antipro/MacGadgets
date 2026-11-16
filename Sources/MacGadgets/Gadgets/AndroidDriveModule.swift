@@ -5,7 +5,7 @@ import Foundation
 @MainActor
 final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
     override var identifier: String { "android-drive" }
-    override var displayName: String { "Android 磁盘" }
+    override var displayName: String { L10n.tr("android.title") }
 
     private enum DefaultsKey {
         static let autoMount = "AndroidDrive.autoMount"
@@ -82,15 +82,15 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
     var summaryText: String {
         switch state {
         case .idle:
-            return "Android 磁盘：未连接手机"
+            return L10n.tr("android.summary.idle")
         case .scanning:
-            return "Android 磁盘：正在扫描 USB 设备..."
+            return L10n.tr("android.summary.scanning")
         case .connecting(let name):
-            return "Android 磁盘：正在挂载 \(name)..."
+            return L10n.tr("android.summary.connecting", name)
         case .mounted(let dev):
-            return "Android 磁盘：已挂载 \(dev.deviceName)（\(dev.mountPoint)）"
+            return L10n.tr("android.summary.mounted", dev.deviceName, dev.mountPoint)
         case .error(let msg, _):
-            return "Android 磁盘：\(msg)"
+            return L10n.tr("android.summary.error", msg)
         }
     }
 
@@ -301,7 +301,7 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
                     self.isConnecting = false
                     if userInitiated {
                         self.state = .error(
-                            message: "未检测到开启「文件传输 (MTP)」的 Android 手机",
+                            message: L10n.tr("android.error.no_device"),
                             canReleasePTPD: false
                         )
                     } else if case .scanning = self.state {
@@ -332,7 +332,7 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
                         Task { @MainActor in
                             self.isConnecting = false
                             self.state = .error(
-                                message: "手机已连接但未开放存储，请解锁手机并选择「传输文件 (MTP)」",
+                                message: L10n.tr("android.error.no_storage"),
                                 canReleasePTPD: false
                             )
                             self.onStateChange?()
@@ -419,8 +419,8 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
                     self.isConnecting = false
                     self.state = .error(
                         message: busy && hasPTPD
-                            ? "USB 接口被系统进程（ptpcamerad）占用，请点击释放并重试"
-                            : (transportErr.errorDescription ?? "USB 连接失败"),
+                            ? L10n.tr("android.error.ptpcamerad_busy")
+                            : (transportErr.errorDescription ?? L10n.tr("android.error.usb_failed")),
                         canReleasePTPD: busy
                     )
                     self.onStateChange?()
@@ -445,7 +445,7 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
         // Drop the mount first so nothing else keeps talking to the wedged device.
         teardownActiveSession(forceUnmount: true, flushPendingWrites: false)
         state = .error(
-            message: "\(deviceName) 传输中断（\(reason)），正在尝试自动恢复 USB 连接……",
+            message: L10n.tr("android.error.transfer_recovering", deviceName, reason),
             canReleasePTPD: false
         )
         onStateChange?()
@@ -462,7 +462,7 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
                     self.scanAndConnectIfNeeded(userInitiated: false)
                 } else {
                     self.state = .error(
-                        message: "\(deviceName) 传输中断（\(reason)）。请重新插拔数据线并选择「传输文件 (MTP)」后重试。",
+                        message: L10n.tr("android.error.transfer_failed", deviceName, reason),
                         canReleasePTPD: false
                     )
                     self.onStateChange?()

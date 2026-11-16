@@ -1,4 +1,4 @@
-.PHONY: build test app install run clean
+.PHONY: build test app universal install run clean
 
 build:
 	swift build
@@ -8,6 +8,9 @@ test:
 
 app:
 	./Scripts/build_app.sh
+
+universal:
+	./Scripts/build_universal_app.sh
 
 install: app
 	rm -rf /Applications/MacGadgets.app

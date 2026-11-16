@@ -12,12 +12,12 @@ enum MTPTransportError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .deviceNotFound: return "未检测到可用的 MTP 设备"
-        case .deviceBusy: return "USB MTP 接口被其他程序占用"
-        case .noEndpoints: return "未找到有效的 USB 批量传输端点"
-        case .disconnected: return "USB 设备已断开连接"
-        case .timeout: return "USB 传输超时，请确认手机处于解锁并允许文件传输状态"
-        case .ioError(let code): return "USB 通信错误 (0x\(String(code, radix: 16)))"
+        case .deviceNotFound: return L10n.tr("mtp.transport.device_not_found")
+        case .deviceBusy: return L10n.tr("mtp.transport.device_busy")
+        case .noEndpoints: return L10n.tr("mtp.transport.no_endpoints")
+        case .disconnected: return L10n.tr("mtp.transport.disconnected")
+        case .timeout: return L10n.tr("mtp.transport.timeout")
+        case .ioError(let code): return L10n.tr("mtp.transport.io_error", String(code, radix: 16))
         }
     }
 }
@@ -105,22 +105,22 @@ enum MTPError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidContainer: return "MTP 数据包格式无效"
-        case .unexpectedContainerType(let t): return "收到意外的 MTP 容器类型: \(t)"
+        case .invalidContainer: return L10n.tr("mtp.error.invalid_container")
+        case .unexpectedContainerType(let t): return L10n.tr("mtp.error.unexpected_container", t)
         case .protocolError(let code):
             let hex = String(format: "0x%04X", code)
             switch MTPResponseCode(rawValue: code) {
-            case .accessDenied: return "手机拒绝访问（\(hex)），请确认手机已解锁并允许文件传输"
-            case .storeFull: return "手机存储空间已满（\(hex)）"
-            case .storeReadOnly, .objectWriteProtected: return "目标目录只读或受保护（\(hex)）"
-            case .storeNotAvailable: return "手机存储不可用，请确认文件传输模式已开启（\(hex)）"
-            case .invalidObjectHandle: return "文件或目录句柄已失效（\(hex)）"
-            case .operationNotSupported: return "设备不支持此 MTP 操作（\(hex)）"
-            default: return "MTP 协议错误: \(hex)"
+            case .accessDenied: return L10n.tr("mtp.error.access_denied", hex)
+            case .storeFull: return L10n.tr("mtp.error.store_full", hex)
+            case .storeReadOnly, .objectWriteProtected: return L10n.tr("mtp.error.read_only", hex)
+            case .storeNotAvailable: return L10n.tr("mtp.error.store_unavailable", hex)
+            case .invalidObjectHandle: return L10n.tr("mtp.error.invalid_handle", hex)
+            case .operationNotSupported: return L10n.tr("mtp.error.not_supported", hex)
+            default: return L10n.tr("mtp.error.protocol", hex)
             }
-        case .invalidDataset(let msg): return "MTP 数据解析失败: \(msg)"
-        case .unsupportedOperation(let msg): return "不支持的操作: \(msg)"
-        case .fileIO(let msg): return "本地文件读写失败: \(msg)"
+        case .invalidDataset(let msg): return L10n.tr("mtp.error.invalid_dataset", msg)
+        case .unsupportedOperation(let msg): return L10n.tr("mtp.error.unsupported_operation", msg)
+        case .fileIO(let msg): return L10n.tr("mtp.error.file_io", msg)
         }
     }
 }
@@ -157,7 +157,7 @@ struct MTPStorageInfo: Equatable {
         if !desc.isEmpty { return desc }
         let label = volumeLabel.trimmingCharacters(in: .whitespacesAndNewlines)
         if !label.isEmpty { return label }
-        return "存储 \(String(format: "0x%08X", storageID))"
+        return L10n.tr("mtp.storage.fallback", String(format: "0x%08X", storageID))
     }
 
     var isReadOnly: Bool {

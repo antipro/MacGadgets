@@ -25,9 +25,37 @@ private func testDurationFormatter() {
     check(DurationFormatter.countdown(57600) == "16:00:00", "countdown 57600")
     check(DurationFormatter.countdown(90) == "01:30", "countdown 90")
     check(DurationFormatter.countdown(0) == "00:00", "countdown 0")
+    let previousLanguage = L10n.currentSelection
+    defer { L10n.setLanguage(previousLanguage) }
+
+    L10n.setLanguage(.zhHans)
     check(DurationFormatter.humanReadable(57600) == "16 小时", "humanReadable 57600")
-    check(DurationFormatter.humanReadable(5400) == "1 小时30 分", "humanReadable 5400")
+    check(DurationFormatter.humanReadable(5400) == "1 小时 30 分", "humanReadable 5400")
     check(DurationFormatter.humanReadable(45) == "45 秒", "humanReadable 45")
+
+    L10n.setLanguage(.en)
+    check(DurationFormatter.humanReadable(57600) == "16 hr", "humanReadable 57600 en")
+    check(DurationFormatter.humanReadable(5400) == "1 hr 30 min", "humanReadable 5400 en")
+    check(DurationFormatter.humanReadable(45) == "45 sec", "humanReadable 45 en")
+}
+
+private func testLocalization() {
+    let previousLanguage = L10n.currentSelection
+    defer { L10n.setLanguage(previousLanguage) }
+
+    check(AppLanguage.selectableLanguages.count == 13, "13 selectable languages")
+    check(AppLanguage.resolveSystemLanguage(preferred: ["zh-Hans-CN"]) == .zhHans, "resolve zh-Hans")
+    check(AppLanguage.resolveSystemLanguage(preferred: ["zh-Hant-TW"]) == .zhHant, "resolve zh-Hant")
+    check(AppLanguage.resolveSystemLanguage(preferred: ["pt-BR"]) == .pt, "resolve pt-BR")
+    check(AppLanguage.resolveSystemLanguage(preferred: ["ar-SA"]) == .ar, "resolve ar-SA")
+    check(AppLanguage.ar.isRTL, "Arabic is RTL")
+    check(!AppLanguage.en.isRTL, "English is LTR")
+
+    for lang in AppLanguage.selectableLanguages {
+        L10n.setLanguage(lang)
+        let title = L10n.tr("prefs.window_title")
+        check(!title.isEmpty && title != "prefs.window_title", "prefs.window_title localized for \(lang.rawValue)")
+    }
 }
 
 private func testScrollReversalLogic() {
@@ -483,6 +511,7 @@ private func testMTPVirtualFileSystemAndNFSv3() throws {
 struct TestRunner {
     static func main() throws {
         testDurationFormatter()
+        testLocalization()
         testScrollReversalLogic()
         testPowerAssertion()
         try testMTPBinaryAndClientFraming()
