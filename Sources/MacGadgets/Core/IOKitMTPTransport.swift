@@ -62,7 +62,7 @@ final class IOKitMTPTransport: MTPUSBTransport {
         }
     }
 
-    static func open(candidate: USBMTPDeviceCandidate) throws -> IOKitMTPTransport {
+    static func open(candidate: USBMTPDeviceCandidate, seize: Bool = false) throws -> IOKitMTPTransport {
         var handle: CUSBHandle?
         var mpsIn: UInt16 = 512
         var mpsOut: UInt16 = 512
@@ -71,6 +71,7 @@ final class IOKitMTPTransport: MTPUSBTransport {
         let status = cusb_open(
             candidate.locationID,
             candidate.interfaceNumber,
+            seize,
             &handle,
             &mpsIn,
             &mpsOut,

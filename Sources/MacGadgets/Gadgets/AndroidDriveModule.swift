@@ -142,10 +142,9 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
 
         workQueue.async { [weak self] in
             Self.terminatePTPCameraDaemon()
-            Thread.sleep(forTimeInterval: 0.5)
             let target = self
             DispatchQueue.main.async {
-                target?.scanAndConnectIfNeeded(userInitiated: true)
+                target?.scanAndConnectIfNeeded(userInitiated: true, seize: true)
             }
         }
     }
@@ -279,7 +278,7 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
 
     // MARK: - Scan & Mount Pipeline
 
-    private func scanAndConnectIfNeeded(userInitiated: Bool) {
+    private func scanAndConnectIfNeeded(userInitiated: Bool, seize: Bool = false) {
         guard !isConnecting else { return }
         if case .mounted = state { return }
 
@@ -318,7 +317,7 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
             }
 
             do {
-                let transport = try IOKitMTPTransport.open(candidate: candidate)
+                let transport = try IOKitMTPTransport.open(candidate: candidate, seize: seize)
                 let client = MTPClient(transport: transport)
                 do {
                     try client.openSession()
@@ -563,13 +562,15 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
     }
 
     nonisolated private static func terminatePTPCameraDaemon() {
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/usr/bin/killall")
-        proc.arguments = ["ptpcamerad"]
-        proc.standardOutput = Pipe()
-        proc.standardError = Pipe()
-        try? proc.run()
-        proc.waitUntilExit()
+        for daemon in ["ptpcamerad", "mscamerad-xpc"] {
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: "/usr/bin/killall")
+            proc.arguments = ["-9", daemon]
+            proc.standardOutput = Pipe()
+            proc.standardError = Pipe()
+            try? proc.run()
+            proc.waitUntilExit()
+        }
     }
 }
 

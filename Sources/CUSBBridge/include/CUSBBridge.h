@@ -42,10 +42,12 @@ typedef struct CUSBHandleOpaque *CUSBHandle;
 int32_t cusb_enumerate_mtp_candidates(CUSBDeviceCandidate *out_candidates, int32_t max_count);
 
 /// Open the MTP interface for the USB device matching `location_id` and `interface_number`.
+/// When `seize` is true, uses `USBInterfaceOpenSeize` to reclaim the interface from another client (e.g. ptpcamerad).
 /// Returns CUSB_OK on success and populates `out_handle`.
 CUSBStatus cusb_open(
     uint32_t location_id,
     uint8_t interface_number,
+    bool seize,
     CUSBHandle *out_handle,
     uint16_t *out_bulk_in_max_packet,
     uint16_t *out_bulk_out_max_packet,

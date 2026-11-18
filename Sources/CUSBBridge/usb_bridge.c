@@ -345,6 +345,7 @@ static CUSBStatus open_with_class(
     const char *class_name,
     uint32_t location_id,
     uint8_t interface_number,
+    bool seize,
     CUSBHandle *out_handle,
     uint16_t *out_bulk_in_max_packet,
     uint16_t *out_bulk_out_max_packet,
@@ -387,7 +388,9 @@ static CUSBStatus open_with_class(
                             (*intf)->GetInterfaceNumber(intf, &if_num);
 
                             if (if_num == interface_number) {
-                                IOReturn kr = (*intf)->USBInterfaceOpen(intf);
+                                IOReturn kr = seize
+                                    ? (*intf)->USBInterfaceOpenSeize(intf)
+                                    : (*intf)->USBInterfaceOpen(intf);
                                 if (kr == kIOReturnExclusiveAccess) {
                                     // Do not seize silently; report busy so caller can inform user or release ptpcamerad
                                     if (out_io_return) *out_io_return = kr;
@@ -478,6 +481,7 @@ static CUSBStatus open_with_class(
 CUSBStatus cusb_open(
     uint32_t location_id,
     uint8_t interface_number,
+    bool seize,
     CUSBHandle *out_handle,
     uint16_t *out_bulk_in_max_packet,
     uint16_t *out_bulk_out_max_packet,
@@ -491,6 +495,7 @@ CUSBStatus cusb_open(
         kIOUSBDeviceClassName,
         location_id,
         interface_number,
+        seize,
         out_handle,
         out_bulk_in_max_packet,
         out_bulk_out_max_packet,
@@ -501,6 +506,7 @@ CUSBStatus cusb_open(
             "IOUSBHostDevice",
             location_id,
             interface_number,
+            seize,
             out_handle,
             out_bulk_in_max_packet,
             out_bulk_out_max_packet,
