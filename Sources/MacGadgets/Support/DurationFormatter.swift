@@ -14,7 +14,7 @@ enum DurationFormatter {
         return String(format: "%02d:%02d", minutes, secs)
     }
 
-    /// `1 小时 30 分`, `16 小时`, `45 秒` — used for menu labels.
+    /// `1 hr 30 min`, `16 hr`, `45 sec` — used for menu labels.
     static func humanReadable(_ seconds: TimeInterval) -> String {
         let total = max(1, Int(seconds.rounded()))
         let hours = total / 3600
@@ -28,7 +28,7 @@ enum DurationFormatter {
         return parts.isEmpty ? L10n.tr("duration.zero_seconds") : parts.joined(separator: " ")
     }
 
-    /// Parses `"90"`, `"90m"`, `"2h"`, `"1h30m"`, `"57600s"`, `"16:00:00"`, `"16 小时"`. Returns seconds.
+    /// Parses `"90"`, `"90m"`, `"2h"`, `"1h30m"`, `"57600s"`, `"16:00:00"`, `"16 hr"` (and localized units). Returns seconds.
     static func parse(_ raw: String) -> TimeInterval? {
         let text = raw
             .trimmingCharacters(in: .whitespacesAndNewlines)
