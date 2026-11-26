@@ -42,6 +42,8 @@
 	<string>13.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>MacGadgets uses the local network to discover and pair with KDE Connect devices for clipboard sync and file transfers.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>MacGadgets</string>
 </dict>

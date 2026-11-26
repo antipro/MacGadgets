@@ -507,6 +507,100 @@ private func testMTPVirtualFileSystemAndNFSv3() throws {
     check(readBE32(28) == 16, "16-byte NFSv3 root filehandle returned")
 }
 
+// MARK: - KDE Connect Tests
+
+private func testKDEConnectProtocol() throws {
+    let idPkt = KDEConnectPacket.identity(
+        deviceId: "testdevice1234567890abcdef123456",
+        deviceName: "TestMac",
+        tcpPort: 1716
+    )
+    let encoded = try idPkt.encode()
+    check(encoded.last == 0x0A, "Encoded packet ends with newline")
+
+    var lineBuffer = KDEConnectLineBuffer()
+    let split = encoded.count / 2
+    let part1 = lineBuffer.append(encoded.prefix(split))
+    check(part1.isEmpty, "Partial line buffered")
+    let part2 = lineBuffer.append(encoded.dropFirst(split))
+    check(part2.count == 1, "Complete line emitted")
+
+    let decoded = try KDEConnectPacket.decode(fromLineData: part2[0])
+    check(decoded.type == KDEConnectPacketType.identity, "Decoded identity type")
+    check(decoded.deviceId == "testdevice1234567890abcdef123456", "Decoded deviceId")
+    check(decoded.deviceName == "TestMac", "Decoded deviceName")
+    check(decoded.tcpPort == 1716, "Decoded tcpPort")
+    check(decoded.protocolVersion == 7, "Decoded protocolVersion")
+
+    let sharePkt = KDEConnectPacket.shareFile(filename: "hello.txt", size: 42, port: 1739)
+    let shareLine = try sharePkt.encode().dropLast()
+    let decodedShare = try KDEConnectPacket.decode(fromLineData: Data(shareLine))
+    check(decodedShare.type == KDEConnectPacketType.shareRequest, "Decoded shareRequest")
+    check(decodedShare.shareFilename == "hello.txt", "Decoded filename")
+    check(decodedShare.payloadSize == 42, "Decoded payloadSize")
+    check(decodedShare.transferPort == 1739, "Decoded transferPort")
+
+    let clipPkt = KDEConnectPacket.clipboard(content: "copied text")
+    let decodedClip = try KDEConnectPacket.decode(fromLineData: Data(try clipPkt.encode().dropLast()))
+    check(decodedClip.clipboardContent == "copied text", "Decoded clipboard content")
+}
+
+private func testKDEConnectCryptoAndTLSHandshake() throws {
+    let deviceA = "a1b2c3d4e5f60718293a4b5c6d7e8f90"
+    let deviceB = "0f9e8d7c6b5a4938271605f4e3d2c1b0"
+    let idA = try KDEConnectCrypto.loadOrCreateIdentity(deviceId: deviceA)
+    let idB = try KDEConnectCrypto.loadOrCreateIdentity(deviceId: deviceB)
+
+    check(KDEConnectCrypto.extractCommonName(from: idA.certificate) == deviceA, "Cert A CN == deviceA")
+    check(KDEConnectCrypto.extractCommonName(from: idB.certificate) == deviceB, "Cert B CN == deviceB")
+    check(idA.fingerprintHex.count == 64, "SHA-256 hex length is 64")
+
+    // Loopback mTLS upgrade over socketpair
+    var sv: [Int32] = [-1, -1]
+    check(Darwin.socketpair(AF_UNIX, SOCK_STREAM, 0, &sv) == 0, "socketpair created")
+    let sockClient = KDEConnectTLSSocket(fd: sv[0])
+    let sockServer = KDEConnectTLSSocket(fd: sv[1])
+    defer {
+        sockClient.close()
+        sockServer.close()
+    }
+
+    let group = DispatchGroup()
+    var serverErr: Error?
+    var receivedData = Data()
+
+    group.enter()
+    DispatchQueue.global().async {
+        defer { group.leave() }
+        do {
+            try sockServer.upgradeToTLS(
+                side: .serverSide,
+                localIdentity: idB.identity,
+                expectedDeviceId: deviceA,
+                pinnedCertificateDER: idA.certificateDER
+            )
+            receivedData = try sockServer.readTLS()
+            try sockServer.writeTLS(Data("pong\n".utf8))
+        } catch {
+            serverErr = error
+        }
+    }
+
+    try sockClient.upgradeToTLS(
+        side: .clientSide,
+        localIdentity: idA.identity,
+        expectedDeviceId: deviceB,
+        pinnedCertificateDER: idB.certificateDER
+    )
+    try sockClient.writeTLS(Data("ping\n".utf8))
+    let reply = try sockClient.readTLS()
+    group.wait()
+
+    if let serverErr { throw serverErr }
+    check(String(data: receivedData, encoding: .utf8) == "ping\n", "Server received encrypted ping")
+    check(String(data: reply, encoding: .utf8) == "pong\n", "Client received encrypted pong")
+}
+
 @main
 struct TestRunner {
     static func main() throws {
@@ -518,6 +612,8 @@ struct TestRunner {
         try testMTPUploadStreamsExactLength()
         try testMTPResetSessionReopensSession()
         try testMTPVirtualFileSystemAndNFSv3()
+        try testKDEConnectProtocol()
+        try testKDEConnectCryptoAndTLSHandshake()
         print("All MacGadgets tests passed!")
     }
 }

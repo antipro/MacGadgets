@@ -2,6 +2,10 @@
 
 A native macOS menu bar utility built entirely with Swift, AppKit, IOKit, and CoreGraphics. Only Xcode Command Line Tools are required to build (no full Xcode installation, Homebrew, or macFUSE needed).
 
+<p align="center">
+  <img src="docs/screenshot.jpg" alt="MacGadgets Control Center" width="340" />
+</p>
+
 ## Features
 
 1. **Keep Awake (Prevent Sleep)**
@@ -22,8 +26,12 @@ A native macOS menu bar utility built entirely with Swift, AppKit, IOKit, and Co
    - Supports browsing, drag-and-drop copying, creating folders, renaming, and deleting files in **Finder**, while isolating macOS-generated `._*` and `.DS_Store` metadata files in memory.
    - Shows storage capacity in the Control Center card with one-click **Open in Finder** and **Safely Eject**, and automatically cleans up the mount when unplugging the cable or ejecting from Finder. If macOS `ptpcamerad` holds the USB interface, you can release it and retry with one click.
 
-4. **Background Presence & System Integration**
-   - Runs as a menu bar-only app without a Dock icon (`LSUIElement = true`), and supports **Launch at Login** via native `SMAppService`.
+4. **KDE Connect (Clipboard Sync & File Transfer)**
+   - Native Swift implementation of the KDE Connect protocol (UDP discovery on port `1716`, TCP + mutual TLS with self-signed X.509 certificates, and dedicated TLS file transfer channels).
+   - Supports device pairing/unpairing, automatic bidirectional clipboard sync, one-click clipboard push, and sending/receiving files (with drag-and-drop onto paired devices and saving incoming files to `~/Downloads`).
+
+5. **Background Presence & System Integration**
+   - Runs as a menu bar-only app without a Dock icon (`LSUIElement = true`), supports **Launch at Login** via native `SMAppService`, and lets you enable/disable individual modules in **Preferences**.
 
 ## Building, Testing, and Running
 

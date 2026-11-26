@@ -19,6 +19,9 @@ swiftc \
     "$ROOT_DIR/Sources/MacGadgets/Core/MTPProtocol.swift" \
     "$ROOT_DIR/Sources/MacGadgets/Core/MTPVirtualFileSystem.swift" \
     "$ROOT_DIR/Sources/MacGadgets/Core/NFSv3Server.swift" \
+    "$ROOT_DIR/Sources/MacGadgets/Core/KDEConnectCrypto.swift" \
+    "$ROOT_DIR/Sources/MacGadgets/Core/KDEConnectProtocol.swift" \
+    "$ROOT_DIR/Sources/MacGadgets/Core/KDEConnectTransport.swift" \
     "$ROOT_DIR/Tests/run_tests.swift" \
     -o "$OUT_BIN"
 

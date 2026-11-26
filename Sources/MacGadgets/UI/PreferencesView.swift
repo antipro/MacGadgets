@@ -4,6 +4,7 @@ struct PreferencesView: View {
     @ObservedObject var keepAwake: KeepAwakeModule
     @ObservedObject var scrollReverser: ScrollReverserModule
     @ObservedObject var androidDrive: AndroidDriveModule
+    @ObservedObject var kdeConnect: KDEConnectModule
     @ObservedObject private var l10n = LocalizationManager.shared
 
     @State private var launchAtLogin = LaunchAtLogin.shared.isEnabled
@@ -59,22 +60,69 @@ struct PreferencesView: View {
 
             Section(L10n.tr("prefs.section.gadgets")) {
                 Toggle(
+                    L10n.tr("keep_awake.title"),
+                    isOn: $keepAwake.isModuleEnabled
+                )
+                .toggleStyle(.checkbox)
+
+                Toggle(
                     L10n.tr("keep_awake.allow_display_sleep"),
                     isOn: $keepAwake.displayAllowedToSleep
                 )
+                .disabled(!keepAwake.isModuleEnabled)
+                .padding(.leading, 20)
+
+                Divider()
+
+                Toggle(
+                    L10n.tr("scroll.title"),
+                    isOn: $scrollReverser.isModuleEnabled
+                )
+                .toggleStyle(.checkbox)
+
                 Toggle(
                     L10n.tr("scroll.invert_horizontal"),
                     isOn: $scrollReverser.invertHorizontal
                 )
+                .disabled(!scrollReverser.isModuleEnabled)
+                .padding(.leading, 20)
+
+                Divider()
+
+                Toggle(
+                    L10n.tr("android.title"),
+                    isOn: $androidDrive.isModuleEnabled
+                )
+                .toggleStyle(.checkbox)
+
                 Toggle(
                     L10n.tr("android.auto_mount"),
                     isOn: $androidDrive.isAutoMountEnabled
                 )
+                .disabled(!androidDrive.isModuleEnabled)
+                .padding(.leading, 20)
+
                 Toggle(
                     L10n.tr("android.open_finder_on_mount"),
                     isOn: $androidDrive.openFinderOnMount
                 )
-                .disabled(!androidDrive.isAutoMountEnabled)
+                .disabled(!androidDrive.isModuleEnabled || !androidDrive.isAutoMountEnabled)
+                .padding(.leading, 20)
+
+                Divider()
+
+                Toggle(
+                    L10n.tr("kdeconnect.title"),
+                    isOn: $kdeConnect.isEnabled
+                )
+                .toggleStyle(.checkbox)
+
+                Toggle(
+                    L10n.tr("kdeconnect.clipboard_sync"),
+                    isOn: $kdeConnect.isClipboardSyncEnabled
+                )
+                .disabled(!kdeConnect.isEnabled)
+                .padding(.leading, 20)
             }
         }
         .formStyle(.grouped)

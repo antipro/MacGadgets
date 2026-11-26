@@ -8,6 +8,7 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
     override var displayName: String { L10n.tr("android.title") }
 
     private enum DefaultsKey {
+        static let moduleEnabled = "AndroidDrive.moduleEnabled"
         static let autoMount = "AndroidDrive.autoMount"
         static let openFinderOnMount = "AndroidDrive.openFinderOnMount"
     }
@@ -47,6 +48,23 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
     private var activeMountPoint: String?
     private var manuallyEjectedLocationID: UInt32?
     private var isConnecting = false
+
+    @Published var isModuleEnabled: Bool {
+        didSet {
+            defaults.set(isModuleEnabled, forKey: DefaultsKey.moduleEnabled)
+            if isModuleEnabled {
+                manuallyEjectedLocationID = nil
+                setupObservers()
+                if isAutoMountEnabled {
+                    scanAndConnectIfNeeded(userInitiated: false)
+                }
+            } else {
+                stopObservers()
+                teardownActiveSession(forceUnmount: false)
+            }
+            onStateChange?()
+        }
+    }
 
     @Published var isAutoMountEnabled: Bool {
         didSet {
@@ -95,6 +113,11 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
     }
 
     override init() {
+        if defaults.object(forKey: DefaultsKey.moduleEnabled) == nil {
+            self.isModuleEnabled = true
+        } else {
+            self.isModuleEnabled = defaults.bool(forKey: DefaultsKey.moduleEnabled)
+        }
         if defaults.object(forKey: DefaultsKey.autoMount) == nil {
             self.isAutoMountEnabled = true
         } else {
@@ -108,9 +131,11 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
         super.init()
 
         NFSMounter.cleanupStaleMounts()
-        setupObservers()
-        if isAutoMountEnabled {
-            scanAndConnectIfNeeded(userInitiated: false)
+        if isModuleEnabled {
+            setupObservers()
+            if isAutoMountEnabled {
+                scanAndConnectIfNeeded(userInitiated: false)
+            }
         }
     }
 
@@ -175,7 +200,7 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
         }
     }
 
-    override func shutdown() {
+    private func stopObservers() {
         healthTimer?.invalidate()
         healthTimer = nil
         hotplugMonitor?.stop()
@@ -184,6 +209,10 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
             NSWorkspace.shared.notificationCenter.removeObserver(unmountObserver)
             self.unmountObserver = nil
         }
+    }
+
+    override func shutdown() {
+        stopObservers()
 
         // Synchronously unmount & close during app termination
         let mp = activeMountPoint
@@ -279,6 +308,7 @@ final class AndroidDriveModule: BaseGadgetModule, ObservableObject {
     // MARK: - Scan & Mount Pipeline
 
     private func scanAndConnectIfNeeded(userInitiated: Bool, seize: Bool = false) {
+        guard isModuleEnabled else { return }
         guard !isConnecting else { return }
         if case .mounted = state { return }
 

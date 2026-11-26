@@ -10,6 +10,7 @@ final class KeepAwakeModule: BaseGadgetModule, ObservableObject {
 
     private enum DefaultsKey {
         static let allowDisplaySleep = "KeepAwake.allowDisplaySleep"
+        static let moduleEnabled = "KeepAwake.moduleEnabled"
     }
 
     static let defaultQuickDuration: TimeInterval = 16 * 60 * 60 // 57600 seconds
@@ -59,6 +60,16 @@ final class KeepAwakeModule: BaseGadgetModule, ObservableObject {
     @Published private(set) var now: Date = Date()
     @Published private(set) var lastFinishedMessage: String?
     @Published private(set) var lastErrorMessage: String?
+    @Published var isModuleEnabled: Bool {
+        didSet {
+            defaults.set(isModuleEnabled, forKey: DefaultsKey.moduleEnabled)
+            if !isModuleEnabled {
+                cancel()
+            }
+            onStateChange?()
+        }
+    }
+
     @Published var displayAllowedToSleep: Bool {
         didSet {
             defaults.set(displayAllowedToSleep, forKey: DefaultsKey.allowDisplaySleep)
@@ -109,6 +120,11 @@ final class KeepAwakeModule: BaseGadgetModule, ObservableObject {
     }
 
     override init() {
+        if UserDefaults.standard.object(forKey: DefaultsKey.moduleEnabled) == nil {
+            self.isModuleEnabled = true
+        } else {
+            self.isModuleEnabled = UserDefaults.standard.bool(forKey: DefaultsKey.moduleEnabled)
+        }
         self.displayAllowedToSleep = UserDefaults.standard.bool(forKey: DefaultsKey.allowDisplaySleep)
         super.init()
     }

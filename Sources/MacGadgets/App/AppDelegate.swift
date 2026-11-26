@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var keepAwakeModule: KeepAwakeModule?
     private var scrollReverserModule: ScrollReverserModule?
     private var androidDriveModule: AndroidDriveModule?
+    private var kdeConnectModule: KDEConnectModule?
     private var globalClickMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -42,10 +43,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let keepAwake = KeepAwakeModule()
         let scrollReverser = ScrollReverserModule()
         let androidDrive = AndroidDriveModule()
+        let kdeConnect = KDEConnectModule()
         self.keepAwakeModule = keepAwake
         self.scrollReverserModule = scrollReverser
         self.androidDriveModule = androidDrive
-        self.modules = [keepAwake, scrollReverser, androidDrive]
+        self.kdeConnectModule = kdeConnect
+        self.modules = [keepAwake, scrollReverser, androidDrive, kdeConnect]
 
         for module in modules {
             module.onStateChange = { [weak self] in
@@ -53,7 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             }
         }
 
-        setupPopover(keepAwake: keepAwake, scrollReverser: scrollReverser, androidDrive: androidDrive)
+        setupPopover(keepAwake: keepAwake, scrollReverser: scrollReverser, androidDrive: androidDrive, kdeConnect: kdeConnect)
         LocalizationManager.shared.onLanguageChange = { [weak self] in
             self?.refreshStatusItem()
             self?.preferencesWindow?.title = L10n.tr("prefs.window_title")
@@ -78,12 +81,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private func setupPopover(
         keepAwake: KeepAwakeModule,
         scrollReverser: ScrollReverserModule,
-        androidDrive: AndroidDriveModule
+        androidDrive: AndroidDriveModule,
+        kdeConnect: KDEConnectModule
     ) {
         let rootView = ControlCenterView(
             keepAwake: keepAwake,
             scrollReverser: scrollReverser,
             androidDrive: androidDrive,
+            kdeConnect: kdeConnect,
             onOpenPreferences: { [weak self] in
                 self?.openPreferences()
             },
@@ -162,11 +167,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             return
         }
 
-        guard let keepAwakeModule, let scrollReverserModule, let androidDriveModule else { return }
+        guard let keepAwakeModule, let scrollReverserModule, let androidDriveModule, let kdeConnectModule else { return }
         let prefsView = PreferencesView(
             keepAwake: keepAwakeModule,
             scrollReverser: scrollReverserModule,
-            androidDrive: androidDriveModule
+            androidDrive: androidDriveModule,
+            kdeConnect: kdeConnectModule
         )
         let hostingController = NSHostingController(rootView: prefsView)
         hostingController.sizingOptions = [.preferredContentSize]
@@ -215,14 +221,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         button.title = activeTitles.isEmpty ? "" : " " + activeTitles.joined(separator: " ")
 
         var tooltips = ["MacGadgets"]
-        if let keepAwakeModule, keepAwakeModule.isActive, let title = keepAwakeModule.statusBarTitle {
+        if let keepAwakeModule, keepAwakeModule.isModuleEnabled, keepAwakeModule.isActive, let title = keepAwakeModule.statusBarTitle {
             tooltips.append(L10n.tr("tooltip.keep_awake", title))
         }
-        if let scrollReverserModule, scrollReverserModule.isActiveAndRunning {
+        if let scrollReverserModule, scrollReverserModule.isModuleEnabled, scrollReverserModule.isActiveAndRunning {
             tooltips.append(scrollReverserModule.summaryText)
         }
-        if let androidDriveModule, androidDriveModule.isMounted {
+        if let androidDriveModule, androidDriveModule.isModuleEnabled, androidDriveModule.isMounted {
             tooltips.append(androidDriveModule.summaryText)
+        }
+        if let kdeConnectModule, kdeConnectModule.isEnabled, kdeConnectModule.connectedPairedCount > 0 {
+            tooltips.append(kdeConnectModule.summaryText)
         }
         button.toolTip = tooltips.joined(separator: "\n")
     }

@@ -9,6 +9,7 @@ final class ScrollReverserModule: BaseGadgetModule, ObservableObject {
     override var displayName: String { L10n.tr("scroll.title") }
 
     private enum DefaultsKey {
+        static let moduleEnabled = "ScrollReverser.moduleEnabled"
         static let invertMouseWheel = "ScrollReverser.invertMouseWheel"
         static let invertTrackpad = "ScrollReverser.invertTrackpad"
         static let invertHorizontal = "ScrollReverser.invertHorizontal"
@@ -18,6 +19,13 @@ final class ScrollReverserModule: BaseGadgetModule, ObservableObject {
     private let eventTap = ScrollEventTap()
     private var permissionPollTimer: Timer?
     private var hasPromptedThisSession = false
+
+    @Published var isModuleEnabled: Bool {
+        didSet {
+            defaults.set(isModuleEnabled, forKey: DefaultsKey.moduleEnabled)
+            applyConfig(promptIfNeeded: false)
+        }
+    }
 
     @Published var invertMouseWheel: Bool {
         didSet {
@@ -59,7 +67,7 @@ final class ScrollReverserModule: BaseGadgetModule, ObservableObject {
     }
 
     var isActiveAndRunning: Bool {
-        isAnyEnabled && isTapRunning
+        isModuleEnabled && isAnyEnabled && isTapRunning
     }
 
     var needsPermission: Bool {
@@ -78,6 +86,11 @@ final class ScrollReverserModule: BaseGadgetModule, ObservableObject {
     }
 
     override init() {
+        if UserDefaults.standard.object(forKey: DefaultsKey.moduleEnabled) == nil {
+            self.isModuleEnabled = true
+        } else {
+            self.isModuleEnabled = UserDefaults.standard.bool(forKey: DefaultsKey.moduleEnabled)
+        }
         self.invertMouseWheel = UserDefaults.standard.bool(forKey: DefaultsKey.invertMouseWheel)
         self.invertTrackpad = UserDefaults.standard.bool(forKey: DefaultsKey.invertTrackpad)
         self.invertHorizontal = UserDefaults.standard.bool(forKey: DefaultsKey.invertHorizontal)
@@ -110,7 +123,7 @@ final class ScrollReverserModule: BaseGadgetModule, ObservableObject {
     }
 
     override func refreshMenuState() {
-        if isAnyEnabled && !eventTap.isRunning {
+        if isModuleEnabled && isAnyEnabled && !eventTap.isRunning {
             _ = eventTap.start()
             isTapRunning = eventTap.isRunning
             if isTapRunning {
@@ -128,7 +141,7 @@ final class ScrollReverserModule: BaseGadgetModule, ObservableObject {
     }
 
     private func syncEventTapState(promptIfNeeded: Bool) {
-        guard isAnyEnabled else {
+        guard isModuleEnabled && isAnyEnabled else {
             stopPermissionPolling()
             eventTap.stop()
             isTapRunning = false

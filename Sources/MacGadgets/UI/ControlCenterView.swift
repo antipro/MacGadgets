@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Native frosted-glass NSVisualEffectView wrapper matching macOS Control Center.
 struct VisualEffectBackground: NSViewRepresentable {
@@ -24,6 +25,7 @@ struct ControlCenterView: View {
     @ObservedObject var keepAwake: KeepAwakeModule
     @ObservedObject var scrollReverser: ScrollReverserModule
     @ObservedObject var androidDrive: AndroidDriveModule
+    @ObservedObject var kdeConnect: KDEConnectModule
     @ObservedObject private var l10n = LocalizationManager.shared
     var onOpenPreferences: () -> Void
     var onQuit: () -> Void
@@ -40,9 +42,40 @@ struct ControlCenterView: View {
     var body: some View {
         let _ = l10n.selection
         VStack(spacing: 10) {
-            keepAwakeCard
-            scrollReverserCard
-            androidDriveCard
+            if keepAwake.isModuleEnabled {
+                keepAwakeCard
+            }
+            if scrollReverser.isModuleEnabled {
+                scrollReverserCard
+            }
+            if androidDrive.isModuleEnabled {
+                androidDriveCard
+            }
+            if kdeConnect.isEnabled {
+                kdeConnectCard
+            }
+            if !keepAwake.isModuleEnabled && !scrollReverser.isModuleEnabled && !androidDrive.isModuleEnabled && !kdeConnect.isEnabled {
+                ControlCenterCard {
+                    VStack(spacing: 8) {
+                        Text(L10n.tr("control_center.no_modules_enabled"))
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                        Button(action: onOpenPreferences) {
+                            Text(L10n.tr("control_center.open_preferences"))
+                                .font(.system(size: 11, weight: .medium))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(Color.accentColor.opacity(0.15))
+                                .foregroundColor(.accentColor)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                }
+            }
             footerBar
         }
         .padding(12)
@@ -54,6 +87,7 @@ struct ControlCenterView: View {
             keepAwake.refreshMenuState()
             scrollReverser.refreshMenuState()
             androidDrive.refreshMenuState()
+            kdeConnect.refreshMenuState()
         }
     }
 
@@ -588,6 +622,295 @@ struct ControlCenterView: View {
         formatter.allowedUnits = [.useGB, .useMB]
         formatter.countStyle = .file
         return formatter.string(fromByteCount: Int64(min(bytes, UInt64(Int64.max))))
+    }
+
+    // MARK: - Card 4: KDE Connect
+
+    private var kdeConnectCard: some View {
+        ControlCenterCard {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 10) {
+                    Button(action: { kdeConnect.isEnabled.toggle() }) {
+                        ZStack {
+                            Circle()
+                                .fill(kdeConnect.connectedPairedCount > 0 ? Color.blue : Color.primary.opacity(0.1))
+                                .frame(width: 32, height: 32)
+                            Image(systemName: "laptopcomputer.and.iphone")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(kdeConnect.connectedPairedCount > 0 ? .white : .primary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.tr("kdeconnect.title"))
+                            .font(.system(size: 13, weight: .semibold))
+                        kdeConnectSubtitle
+                    }
+
+                    Spacer(minLength: 4)
+
+                    if kdeConnect.isEnabled {
+                        Button(action: { kdeConnect.refreshDiscovery() }) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .padding(5)
+                                .background(Color.primary.opacity(0.07))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .help(L10n.tr("kdeconnect.refresh"))
+                    }
+
+                    kdeConnectBadge
+                }
+
+                if let error = kdeConnect.errorMessage {
+                    Text(error)
+                        .font(.system(size: 10))
+                        .foregroundColor(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if kdeConnect.isEnabled {
+                    if kdeConnect.devices.isEmpty {
+                        HStack {
+                            Text(L10n.tr("kdeconnect.no_devices"))
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            if !kdeConnect.localFingerprintShort.isEmpty {
+                                Text(kdeConnect.localFingerprintShort)
+                                    .font(.system(size: 9, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    } else {
+                        VStack(spacing: 6) {
+                            ForEach(kdeConnect.devices) { device in
+                                kdeConnectDeviceRow(device)
+                            }
+                        }
+                    }
+
+                    if let transfer = kdeConnect.activeTransfer {
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text(transfer.direction == .sending
+                                     ? L10n.tr("kdeconnect.sending", transfer.filename)
+                                     : L10n.tr("kdeconnect.receiving", transfer.filename))
+                                    .font(.system(size: 10, weight: .medium))
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer()
+                                Text("\(Int(transfer.fraction * 100))%")
+                                    .font(.system(size: 10).monospacedDigit())
+                                    .foregroundColor(.secondary)
+                            }
+                            ProgressView(value: transfer.fraction)
+                                .progressViewStyle(.linear)
+                                .controlSize(.small)
+                        }
+                    } else if let msg = kdeConnect.lastTransferMessage {
+                        HStack {
+                            Text(msg)
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer()
+                            Button(action: { kdeConnect.openDownloadsFolder() }) {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "folder")
+                                    Text(L10n.tr("kdeconnect.downloads"))
+                                }
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.accentColor)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    Toggle(isOn: $kdeConnect.isClipboardSyncEnabled) {
+                        Text(L10n.tr("kdeconnect.clipboard_sync"))
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func kdeConnectDeviceRow(_ device: KDEConnectModule.DeviceState) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: device.isConnected ? "iphone" : "iphone.slash")
+                .font(.system(size: 12))
+                .foregroundColor(device.isConnected ? (device.isPaired ? .blue : .orange) : .secondary)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(device.name)
+                    .font(.system(size: 11, weight: .medium))
+                    .lineLimit(1)
+                if device.hasIncomingPairRequest {
+                    Text(L10n.tr("kdeconnect.pair_request"))
+                        .font(.system(size: 9))
+                        .foregroundColor(.orange)
+                } else if device.isPairingPending {
+                    Text(L10n.tr("kdeconnect.pairing_pending"))
+                        .font(.system(size: 9))
+                        .foregroundColor(.orange)
+                } else if let ip = device.peerIP, device.isConnected {
+                    Text(ip)
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                } else {
+                    Text(L10n.tr("kdeconnect.offline"))
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Spacer(minLength: 4)
+
+            if device.hasIncomingPairRequest {
+                Button(action: { kdeConnect.acceptPair(deviceId: device.id) }) {
+                    Text(L10n.tr("kdeconnect.accept"))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.blue)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                Button(action: { kdeConnect.rejectOrUnpair(deviceId: device.id) }) {
+                    Text(L10n.tr("kdeconnect.reject"))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Color.red.opacity(0.12))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            } else if device.isPaired && device.isConnected {
+                Button(action: { kdeConnect.sendClipboardNow(to: device.id) }) {
+                    Image(systemName: "doc.on.clipboard")
+                        .font(.system(size: 11))
+                        .padding(5)
+                        .background(Color.primary.opacity(0.07))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help(L10n.tr("kdeconnect.help.send_clipboard"))
+
+                Button(action: { kdeConnect.chooseAndSendFiles(to: device.id) }) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "paperplane.fill")
+                        Text(L10n.tr("kdeconnect.send_file"))
+                    }
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.accentColor)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help(L10n.tr("kdeconnect.help.send_file"))
+
+                Button(action: { kdeConnect.rejectOrUnpair(deviceId: device.id) }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .padding(4)
+                }
+                .buttonStyle(.plain)
+                .help(L10n.tr("kdeconnect.unpair"))
+            } else if device.isConnected && !device.isPaired {
+                Button(action: { kdeConnect.requestPair(deviceId: device.id) }) {
+                    Text(device.isPairingPending ? L10n.tr("kdeconnect.pairing") : L10n.tr("kdeconnect.pair"))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(device.isPairingPending ? Color.orange : Color.blue)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(device.isPairingPending)
+            } else if device.isPaired {
+                Button(action: { kdeConnect.rejectOrUnpair(deviceId: device.id) }) {
+                    Text(L10n.tr("kdeconnect.unpair"))
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Color.primary.opacity(0.06))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.primary.opacity(0.05))
+        )
+        .onDrop(of: [UTType.fileURL], isTargeted: nil) { providers in
+            guard device.isPaired && device.isConnected else { return false }
+            for provider in providers {
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                    guard let url else { return }
+                    Task { @MainActor in
+                        kdeConnect.sendFiles(to: device.id, urls: [url])
+                    }
+                }
+            }
+            return true
+        }
+    }
+
+    @ViewBuilder
+    private var kdeConnectSubtitle: some View {
+        if !kdeConnect.isEnabled {
+            Text(L10n.tr("kdeconnect.subtitle.off"))
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+        } else if kdeConnect.connectedPairedCount > 0 {
+            Text(L10n.tr("kdeconnect.subtitle.connected", kdeConnect.connectedPairedCount))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.blue)
+        } else {
+            Text(L10n.tr("kdeconnect.subtitle.listening", kdeConnect.localDeviceName))
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+    }
+
+    @ViewBuilder
+    private var kdeConnectBadge: some View {
+        if !kdeConnect.isEnabled {
+            Text(L10n.tr("kdeconnect.badge.off"))
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+        } else if kdeConnect.connectedPairedCount > 0 {
+            Text(L10n.tr("kdeconnect.badge.connected"))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.blue)
+        } else {
+            Text(L10n.tr("kdeconnect.badge.listening"))
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+        }
     }
 
     // MARK: - Footer
